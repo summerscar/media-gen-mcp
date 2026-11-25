@@ -51,6 +51,8 @@ export type ImageResult = {
 };
 
 type CommonOpts = {
+  /** Any image model id from the provider's live /models list; defaults to config.sensenova.imageModel. */
+  model?: string;
   prompt: string;
   size?: string;
   resolution?: "2K" | "4K";
@@ -83,7 +85,7 @@ async function call(path: string, body: Record<string, unknown>): Promise<ImageR
 
 function baseBody(o: CommonOpts, size: string) {
   return {
-    model: config.sensenova.imageModel,
+    model: o.model ?? config.sensenova.imageModel,
     n: 1,
     size,
     output_format: o.outputFormat ?? "png",

@@ -8,7 +8,10 @@ import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { config } from "./config.js";
+import { startModelWatch } from "./models.js";
 import { registerTools } from "./tools.js";
+
+startModelWatch();
 
 function factory() {
   const server = new McpServer({ name: "media-gen-mcp", version: config.version });

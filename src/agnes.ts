@@ -6,16 +6,14 @@
  */
 import { config, requireKey } from "./config.js";
 
-export const AGNES_IMAGE_MODELS = ["agnes-image-2.5-flash", "agnes-image-2.1-flash", "agnes-image-2.0-flash"] as const;
-export type AgnesImageModel = (typeof AGNES_IMAGE_MODELS)[number];
-
-export const AGNES_VIDEO_MODELS = ["agnes-video-2.5", "agnes-video-2.5-flash"] as const;
-export type AgnesVideoModel = (typeof AGNES_VIDEO_MODELS)[number];
-
 export const AGNES_RATIOS = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"] as const;
 export type AgnesRatio = (typeof AGNES_RATIOS)[number];
 
 export const VIDEO_SIZES = ["720P", "1080P", "1K", "2K"] as const;
+
+/** Defaults only; accepted model ids come from the live /models catalog (see models.ts). */
+export const AGNES_IMAGE_DEFAULT = "agnes-image-2.5-flash";
+export const AGNES_VIDEO_DEFAULT = "agnes-video-2.5";
 
 function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${requireKey("agnes")}`, "Content-Type": "application/json" };
@@ -44,7 +42,8 @@ async function get(path: string): Promise<Record<string, any>> {
 }
 
 export type AgnesImageOpts = {
-  model?: AgnesImageModel;
+  /** Any id from the provider's live /models list; defaults to AGNES_IMAGE_DEFAULT. */
+  model?: string;
   prompt: string;
   /** Tier (1K/2K/3K/4K) on 2.1/2.5; exact pixels such as 1024x768 on 2.0. */
   size?: string;
@@ -57,7 +56,7 @@ export type AgnesImageOpts = {
 export type AgnesImageResult = { url?: string; b64?: string; taskId?: string; requestSize: string };
 
 export async function generateImage(o: AgnesImageOpts): Promise<AgnesImageResult> {
-  const model = o.model ?? AGNES_IMAGE_MODELS[0];
+  const model = o.model ?? AGNES_IMAGE_DEFAULT;
   const legacy = model === "agnes-image-2.0-flash";
   const size = legacy ? o.size ?? "1024x1024" : o.size ?? "2K";
 
@@ -87,7 +86,7 @@ export type AgnesAudioRef = { url: string };
 export type AgnesVideoRef = { url: string; startSeconds?: number; requireAudio?: boolean };
 
 export type AgnesVideoOpts = {
-  model?: AgnesVideoModel;
+  model?: string;
   prompt: string;
   mode: "text" | "keyframe" | "reference";
   /** String, 4-12. Defaults to "5". */
@@ -111,7 +110,7 @@ export const VIDEO_LIMITS = {
 };
 
 function buildVideoBody(o: AgnesVideoOpts) {
-  const model = o.model ?? AGNES_VIDEO_MODELS[0];
+  const model = o.model ?? AGNES_VIDEO_DEFAULT;
   const flash = model === "agnes-video-2.5-flash";
 
   if (flash && o.size && o.size.toUpperCase() !== "720P") {
@@ -160,7 +159,7 @@ function buildVideoBody(o: AgnesVideoOpts) {
 
 export type AgnesVideoTask = {
   videoId: string;
-  model: AgnesVideoModel;
+  model: string;
   status?: string;
   seconds?: string;
   size?: string;
@@ -176,7 +175,7 @@ export async function createVideo(o: AgnesVideoOpts): Promise<AgnesVideoTask> {
 
 export type AgnesVideoStatus = {
   videoId: string;
-  model: AgnesVideoModel;
+  model: string;
   status?: string;
   progress?: number;
   url?: string;
@@ -185,8 +184,8 @@ export type AgnesVideoStatus = {
   error?: unknown;
 };
 
-export async function getVideo(videoId: string, model?: AgnesVideoModel): Promise<AgnesVideoStatus> {
-  const m = model ?? AGNES_VIDEO_MODELS[0];
+export async function getVideo(videoId: string, model?: string): Promise<AgnesVideoStatus> {
+  const m = model ?? AGNES_VIDEO_DEFAULT;
   const json = await get(`/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(m)}`);
   const data = (json.data ?? json) as Record<string, any>;
   const status = data.status ?? json.status;

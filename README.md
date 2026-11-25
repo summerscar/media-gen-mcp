@@ -26,11 +26,11 @@ npm install -g media-gen-mcp        # or: npx media-gen-mcp
 | `AGNES_API_KEY` | — | Enables the `agnes_*` tools |
 | `AGNES_BASE_URL` | `https://apihub.agnes-ai.com/v1` | Agnes API root |
 | `MEDIA_DIR` | `./media` | Where generated files are written |
-| `MEDIA_PREVIEW_MAX_BYTES` | `4194304` | Images above this size are not inlined in the tool result |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | HTTP listener |
 | `MCP_PATH` | `/mcp` | HTTP path |
 | `MCP_AUTH_TOKEN` | — | When set, requests need `Authorization: Bearer <token>` |
 | `MCP_TRANSPORT` | — | `stdio` to force the stdio transport |
+| `MODEL_LIST_TTL_MS` | `3600000` | Refresh interval for each provider's `/models` catalog (minimum 60000) |
 
 Missing keys are not fatal: the server starts, and only the tools of the
 provider without a key return an error.
@@ -77,15 +77,18 @@ SenseNova (`sensenova_image_generate` / `_edit`): `prompt`, `size` (exact
 `resolution` (`2K`/`4K`), `aspect_ratio` (`1:1`, `16:9`, `9:16`, `2:3`, `3:2`),
 `output_format`, `watermark`, `prompt_extend`, `self_correction`.
 
-Agnes (`agnes_image_generate` / `_edit`): `prompt`, `model`
-(`agnes-image-2.5-flash` default, `agnes-image-2.1-flash`,
-`agnes-image-2.0-flash`), `size` (tier `1K`/`2K`/`3K`/`4K`, or exact pixels on
-2.0-flash), `ratio`, `return_base64`. Edits add `images` (https URL or data URI).
+Agnes (`agnes_image_generate` / `_edit`): `prompt`, `model` (any image model id,
+default `agnes-image-2.5-flash`), `size` (tier `1K`/`2K`/`3K`/`4K`, or exact
+pixels on 2.0-flash), `ratio`, `return_base64`. Edits add `images` (https URL or
+data URI).
+
+No tool accepts a fixed model list: every `model` parameter is a free string,
+validated against the provider's live `/models` catalog (see Model catalogs).
 
 ### Video parameters
 
-`agnes_video_create`: `prompt`, `model` (`agnes-video-2.5` default,
-`agnes-video-2.5-flash`), `mode` (`text` | `keyframe` | `reference`),
+`agnes_video_create`: `prompt`, `model` (any video model id, default
+`agnes-video-2.5`), `mode` (`text` | `keyframe` | `reference`),
 `seconds` (`"4"`–`"12"`, default `"5"`), `size` (`720P`/`1080P`/`1K`/`2K`;
 Flash accepts `720P` only), `aspect_ratio`, `seed`, plus `first_frame` /
 `last_frame` for keyframe mode and `images` / `audios` / `videos` for reference
@@ -96,17 +99,38 @@ Video jobs are asynchronous, so the tool returns at once and you poll
 `agnes_video_status` every 1–2 seconds; once the job completes, the status tool
 downloads the MP4 and reports its local path and byte size.
 
+## Model catalogs
+
+Model ids are not hardcoded. Each provider's `/models` endpoint is fetched and
+kept in an in-memory cache:
+
+- refreshed lazily on first use, and on a timer every `MODEL_LIST_TTL_MS`
+  (default 1 h);
+- force-refreshed immediately when a call fails with a model error (unknown /
+  deprecated / renamed id), then retried once — a deprecated model is picked up
+  on the same request, and if it is still gone the error lists the current
+  catalog;
+- a requested model id is fail-fast validated against the catalog; the
+  configured defaults are always accepted even when the provider does not list
+  them (SenseNova's `u1.6-lite` works this way);
+- if a provider's `/models` endpoint is unreachable, the stale list is served
+  and validation is skipped rather than blocking generation.
+
+The cache is per-process; restarting the container starts from an empty
+catalog.
+
 ## Output handling
 
-Every generated file is downloaded before the tool returns, because provider
+Every generated image is downloaded before the tool returns, because provider
 CDN links expire (SenseNova: 24 h). Files land in
-`$MEDIA_DIR/<provider>/<YYYY-MM-DD>/<timestamp>-<rand>.<ext>`. The tool result
-contains:
+`$MEDIA_DIR/<provider>/<YYYY-MM-DD>/<timestamp>-<rand>.<ext>`, but that path is
+local to the server: a remote caller cannot read it. The tool result contains:
 
-- an `image` block (Prints inline when the file is ≤ `MEDIA_PREVIEW_MAX_BYTES` and is an image),
-- a text block with the JSON metadata: local `path`, `mime`, `bytes`, real
-  `width`/`height` read from the file header, provider, model, mode, elapsed
-  time, and token `usage` when the provider reports it.
+- an `image` block with the full image as base64 (always inlined, no size cap),
+- a text block with the JSON metadata: `provider_url` (the provider CDN link,
+  while it lasts), `mime`, `bytes`, real `width`/`height` read from the file
+  header, provider, model, mode, elapsed time, token `usage` when the provider
+  reports it, and the server-local `path` for stdio callers sharing the volume.
 
 ## Notes and known provider quirks
 
@@ -117,6 +141,8 @@ contains:
 - `sensenova-u1.6-lite` is callable even though `/v1/models` does not list it
   (the listing shows `sensenova-u1.5-lite`).
 - `n` is fixed at 1 on both providers; generate one image per call.
+- SenseNova's `/models` lists `sensenova-u1.5-lite` but not the working default
+  `sensenova-u1.6-lite` — validation accepts the default even when it is absent.
 
 ## Development
 
