@@ -10,21 +10,24 @@ import * as agnes from "./agnes.js";
 import * as sensenova from "./sensenova.js";
 import { errorResult, saveFromUrl, toolResult } from "./media.js";
 
-const started = Date.now();
-
 const ratioSchema = z.enum(AGNES_RATIOS).describe("Aspect ratio; the provider picks the pixel size from the tier");
 
 const commonImageNotes =
   "The result is downloaded to the server's MEDIA_DIR and returned as an image block plus JSON metadata (local path, real pixel size, bytes).";
 
-async function finishImage(provider: "sensenova" | "agnes", result: { url?: string; b64?: string }, meta: Record<string, unknown>) {
+async function finishImage(
+  provider: "sensenova" | "agnes",
+  result: { url?: string; b64?: string },
+  meta: Record<string, unknown>,
+  startedAt: number,
+) {
   const source = result.url ?? (result.b64 ? `data:image/png;base64,${result.b64}` : undefined);
   if (!source) throw new Error("provider returned neither a url nor base64 data");
   const file = await saveFromUrl(source, provider);
   return toolResult(file, {
     provider,
     ...meta,
-    elapsed_ms: Date.now() - started,
+    elapsed_ms: Date.now() - startedAt,
     ...(result.url ? { provider_url_expires: "provider CDN links expire; the local copy is authoritative" } : {}),
   });
 }
@@ -52,6 +55,7 @@ export function registerTools(server: McpServer): void {
       }),
     },
     async (args) => {
+      const t0 = Date.now();
       try {
         const result = await sensenova.generateImage({
           prompt: args.prompt,
@@ -68,7 +72,7 @@ export function registerTools(server: McpServer): void {
           mode: "text-to-image",
           request_size: result.requestSize,
           usage: result.usage,
-        });
+        }, t0);
       } catch (error) {
         return errorResult(error);
       }
@@ -100,6 +104,7 @@ export function registerTools(server: McpServer): void {
       }),
     },
     async (args) => {
+      const t0 = Date.now();
       try {
         const result = await sensenova.editImage({
           prompt: args.prompt,
@@ -118,7 +123,7 @@ export function registerTools(server: McpServer): void {
           input_images: args.images.length,
           request_size: result.requestSize,
           usage: result.usage,
-        });
+        }, t0);
       } catch (error) {
         return errorResult(error);
       }
@@ -147,6 +152,7 @@ export function registerTools(server: McpServer): void {
       }),
     },
     async (args) => {
+      const t0 = Date.now();
       try {
         const result = await agnes.generateImage({
           prompt: args.prompt,
@@ -160,7 +166,7 @@ export function registerTools(server: McpServer): void {
           mode: "text-to-image",
           request_size: result.requestSize,
           ...(result.taskId ? { task_id: result.taskId } : {}),
-        });
+        }, t0);
       } catch (error) {
         return errorResult(error);
       }
@@ -185,6 +191,7 @@ export function registerTools(server: McpServer): void {
       }),
     },
     async (args) => {
+      const t0 = Date.now();
       try {
         const result = await agnes.generateImage({
           prompt: args.prompt,
@@ -200,7 +207,7 @@ export function registerTools(server: McpServer): void {
           input_images: args.images.length,
           request_size: result.requestSize,
           ...(result.taskId ? { task_id: result.taskId } : {}),
-        });
+        }, t0);
       } catch (error) {
         return errorResult(error);
       }
