@@ -12,9 +12,13 @@ directly, keeps nothing in a database, and needs only an API key per provider.
 
 ## Install
 
+The npm package is not published yet; run it straight from this repository:
+
 ```bash
-npm install -g media-gen-mcp        # or: npx media-gen-mcp
+npx -y github:summerscar/media-gen-mcp --stdio
 ```
+
+(or `npm install -g github:summerscar/media-gen-mcp`, then `media-gen-mcp --stdio`)
 
 ## Configure
 
