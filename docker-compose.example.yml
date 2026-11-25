@@ -1,0 +1,11 @@
+# Standalone deployment; drop this next to a .env based on .env.example
+services:
+  media-gen-mcp:
+    image: media-gen-mcp:0.1.0
+    container_name: media-mcp
+    restart: unless-stopped
+    env_file: [.env]
+    ports:
+      - "8086:3000"
+    volumes:
+      - ./media:/app/media
