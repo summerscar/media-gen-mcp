@@ -13,7 +13,7 @@ import { errorResult, saveFromUrl, toolResult } from "./media.js";
 const ratioSchema = z.enum(AGNES_RATIOS).describe("Aspect ratio; the provider picks the pixel size from the tier");
 
 const commonImageNotes =
-  "The result is downloaded to the server's MEDIA_DIR and returned as an image block plus JSON metadata (local path, real pixel size, bytes).";
+  "The result is returned as an image block (base64) plus JSON metadata: provider CDN url, real pixel size, bytes and elapsed time. A copy is also written to the server's MEDIA_DIR, but that path is local to the server.";
 
 async function finishImage(
   provider: "sensenova" | "agnes",
@@ -27,8 +27,8 @@ async function finishImage(
   return toolResult(file, {
     provider,
     ...meta,
+    ...(result.url ? { provider_url: result.url, provider_url_expires: "provider CDN links expire; re-generate for a fresh one" } : {}),
     elapsed_ms: Date.now() - startedAt,
-    ...(result.url ? { provider_url_expires: "provider CDN links expire; the local copy is authoritative" } : {}),
   });
 }
 

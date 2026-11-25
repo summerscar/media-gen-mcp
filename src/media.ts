@@ -63,7 +63,7 @@ export type SavedFile = {
   bytes: number;
   width?: number;
   height?: number;
-  /** Present when the file is small enough to inline in a tool result. */
+  /** Inline base64 for image files (always, no size cap); absent for video/audio. */
   previewBase64?: string;
 };
 
@@ -76,8 +76,8 @@ export async function saveBuffer(buf: Buffer, provider: string, fallbackMime?: s
   const path = join(dir, `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`);
   await writeFile(path, buf);
   const dim = dimensions(buf, mime);
-  const preview =
-    mime.startsWith("image/") && buf.length <= config.previewMaxBytes ? buf.toString("base64") : undefined;
+  /** Images are always inlined: callers may not share this filesystem, so a path alone is useless to them. */
+  const preview = mime.startsWith("image/") ? buf.toString("base64") : undefined;
   return { path, mime, bytes: buf.length, ...(dim ?? {}), ...(preview ? { previewBase64: preview } : {}) };
 }
 
