@@ -19,6 +19,8 @@ export type ImageResult = {
     usage?: unknown;
 };
 type CommonOpts = {
+    /** Any image model id from the provider's live /models list; defaults to config.sensenova.imageModel. */
+    model?: string;
     prompt: string;
     size?: string;
     resolution?: "2K" | "4K";

@@ -13,8 +13,6 @@ export declare const config: {
         readonly baseUrl: string;
     };
     readonly mediaDir: string;
-    /** Inline previews larger than this stay on disk only. */
-    readonly previewMaxBytes: number;
     readonly http: {
         readonly port: number;
         readonly host: string;

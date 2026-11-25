@@ -48,7 +48,7 @@ async function call(path, body) {
 }
 function baseBody(o, size) {
     return {
-        model: config.sensenova.imageModel,
+        model: o.model ?? config.sensenova.imageModel,
         n: 1,
         size,
         output_format: o.outputFormat ?? "png",

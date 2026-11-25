@@ -71,7 +71,8 @@ export async function saveBuffer(buf, provider, fallbackMime) {
     const path = join(dir, `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`);
     await writeFile(path, buf);
     const dim = dimensions(buf, mime);
-    const preview = mime.startsWith("image/") && buf.length <= config.previewMaxBytes ? buf.toString("base64") : undefined;
+    /** Images are always inlined: callers may not share this filesystem, so a path alone is useless to them. */
+    const preview = mime.startsWith("image/") ? buf.toString("base64") : undefined;
     return { path, mime, bytes: buf.length, ...(dim ?? {}), ...(preview ? { previewBase64: preview } : {}) };
 }
 /** Download a provider URL (or decode a data URI) into the local media directory. */

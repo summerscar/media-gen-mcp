@@ -10,7 +10,7 @@ export type SavedFile = {
     bytes: number;
     width?: number;
     height?: number;
-    /** Present when the file is small enough to inline in a tool result. */
+    /** Inline base64 for image files (always, no size cap); absent for video/audio. */
     previewBase64?: string;
 };
 export declare function saveBuffer(buf: Buffer, provider: string, fallbackMime?: string): Promise<SavedFile>;

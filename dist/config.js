@@ -20,8 +20,6 @@ export const config = {
         baseUrl: trimSlash(env("AGNES_BASE_URL") ?? "https://apihub.agnes-ai.com/v1"),
     },
     mediaDir: env("MEDIA_DIR") ?? "./media",
-    /** Inline previews larger than this stay on disk only. */
-    previewMaxBytes: Number(env("MEDIA_PREVIEW_MAX_BYTES") ?? 4 * 1024 * 1024),
     http: {
         port: Number(env("PORT") ?? 3000),
         host: env("HOST") ?? "0.0.0.0",

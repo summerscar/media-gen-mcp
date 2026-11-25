@@ -1,11 +1,12 @@
 import * as z from "zod/v4";
 import { config } from "./config.js";
-import { AGNES_IMAGE_MODELS, AGNES_RATIOS, AGNES_VIDEO_MODELS, VIDEO_SIZES } from "./agnes.js";
+import { AGNES_IMAGE_DEFAULT, AGNES_RATIOS, AGNES_VIDEO_DEFAULT } from "./agnes.js";
 import * as agnes from "./agnes.js";
 import * as sensenova from "./sensenova.js";
 import { errorResult, saveFromUrl, toolResult } from "./media.js";
+import { validateModel, withModelRetry } from "./models.js";
 const ratioSchema = z.enum(AGNES_RATIOS).describe("Aspect ratio; the provider picks the pixel size from the tier");
-const commonImageNotes = "The result is downloaded to the server's MEDIA_DIR and returned as an image block plus JSON metadata (local path, real pixel size, bytes).";
+const commonImageNotes = "The result is returned as an image block (base64) plus JSON metadata: provider CDN url, real pixel size, bytes and elapsed time. A copy is also written to the server's MEDIA_DIR, but that path is local to the server.";
 async function finishImage(provider, result, meta, startedAt) {
     const source = result.url ?? (result.b64 ? `data:image/png;base64,${result.b64}` : undefined);
     if (!source)
@@ -14,17 +15,22 @@ async function finishImage(provider, result, meta, startedAt) {
     return toolResult(file, {
         provider,
         ...meta,
+        ...(result.url ? { provider_url: result.url, provider_url_expires: "provider CDN links expire; re-generate for a fresh one" } : {}),
         elapsed_ms: Date.now() - startedAt,
-        ...(result.url ? { provider_url_expires: "provider CDN links expire; the local copy is authoritative" } : {}),
     });
 }
 export function registerTools(server) {
     /* ---------------------------------------------------------------- SenseNova */
     server.registerTool("sensenova_image_generate", {
         title: "SenseNova · generate image",
-        description: `Text-to-image with SenseNova ${config.sensenova.imageModel}. ${commonImageNotes}`,
+        description: `Text-to-image with SenseNova. ${commonImageNotes}`,
         inputSchema: z.object({
             prompt: z.string().min(1).describe("What to draw"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Any image model id from the live /models catalog (e.g. ${config.sensenova.imageModel}); default ${config.sensenova.imageModel}. Refreshed automatically when a model is deprecated.`),
             size: z
                 .string()
                 .optional()
@@ -39,7 +45,10 @@ export function registerTools(server) {
     }, async (args) => {
         const t0 = Date.now();
         try {
-            const result = await sensenova.generateImage({
+            if (args.model)
+                await validateModel("sensenova", args.model, "image");
+            const result = await withModelRetry("sensenova", "image", () => sensenova.generateImage({
+                model: args.model,
                 prompt: args.prompt,
                 size: args.size,
                 resolution: args.resolution,
@@ -48,9 +57,9 @@ export function registerTools(server) {
                 watermark: args.watermark,
                 promptExtend: args.prompt_extend,
                 selfCorrection: args.self_correction,
-            });
+            }));
             return await finishImage("sensenova", result, {
-                model: config.sensenova.imageModel,
+                model: args.model ?? config.sensenova.imageModel,
                 mode: "text-to-image",
                 request_size: result.requestSize,
                 usage: result.usage,
@@ -62,9 +71,14 @@ export function registerTools(server) {
     });
     server.registerTool("sensenova_image_edit", {
         title: "SenseNova · edit image",
-        description: `Edit 1-5 input images with SenseNova ${config.sensenova.imageModel}. ${commonImageNotes}`,
+        description: `Edit 1-5 input images with SenseNova. ${commonImageNotes}`,
         inputSchema: z.object({
             prompt: z.string().min(1).describe("The edit to apply"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Any image model id from the live /models catalog; default ${config.sensenova.imageModel}`),
             images: z
                 .array(z.string())
                 .min(1)
@@ -84,7 +98,10 @@ export function registerTools(server) {
     }, async (args) => {
         const t0 = Date.now();
         try {
-            const result = await sensenova.editImage({
+            if (args.model)
+                await validateModel("sensenova", args.model, "image");
+            const result = await withModelRetry("sensenova", "image", () => sensenova.editImage({
+                model: args.model,
                 prompt: args.prompt,
                 images: args.images,
                 size: args.size,
@@ -94,9 +111,9 @@ export function registerTools(server) {
                 watermark: args.watermark,
                 promptExtend: args.prompt_extend,
                 selfCorrection: args.self_correction,
-            });
+            }));
             return await finishImage("sensenova", result, {
-                model: config.sensenova.imageModel,
+                model: args.model ?? config.sensenova.imageModel,
                 mode: "image-edit",
                 input_images: args.images.length,
                 request_size: result.requestSize,
@@ -110,12 +127,17 @@ export function registerTools(server) {
     /* -------------------------------------------------------------------- Agnes */
     server.registerTool("agnes_image_generate", {
         title: "Agnes · generate image",
-        description: `Text-to-image with Agnes (${AGNES_IMAGE_MODELS.join(", ")}). ` +
+        description: `Text-to-image with Agnes (any image model id from the live /models catalog). ` +
             "2.1/2.5 take a tier plus ratio; 2.0-flash takes exact pixels. " +
             commonImageNotes,
         inputSchema: z.object({
             prompt: z.string().min(1),
-            model: z.enum(AGNES_IMAGE_MODELS).optional().describe("Default agnes-image-2.5-flash"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Any image model id from the live /models catalog (e.g. ${AGNES_IMAGE_DEFAULT}); default ${AGNES_IMAGE_DEFAULT}. ` +
+                "Refreshed automatically when a model is deprecated."),
             size: z
                 .string()
                 .optional()
@@ -126,15 +148,17 @@ export function registerTools(server) {
     }, async (args) => {
         const t0 = Date.now();
         try {
-            const result = await agnes.generateImage({
+            if (args.model)
+                await validateModel("agnes", args.model, "image");
+            const result = await withModelRetry("agnes", "image", () => agnes.generateImage({
                 prompt: args.prompt,
                 model: args.model,
                 size: args.size,
                 ratio: args.ratio,
                 returnBase64: args.return_base64,
-            });
+            }));
             return await finishImage("agnes", result, {
-                model: args.model ?? AGNES_IMAGE_MODELS[0],
+                model: args.model ?? AGNES_IMAGE_DEFAULT,
                 mode: "text-to-image",
                 request_size: result.requestSize,
                 ...(result.taskId ? { task_id: result.taskId } : {}),
@@ -152,7 +176,11 @@ export function registerTools(server) {
         inputSchema: z.object({
             prompt: z.string().min(1),
             images: z.array(z.string()).min(1).max(9).describe("Input images: https URL or data URI"),
-            model: z.enum(AGNES_IMAGE_MODELS).optional().describe("Default agnes-image-2.5-flash"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Any image model id from the live /models catalog; default ${AGNES_IMAGE_DEFAULT}`),
             size: z.string().optional().describe("Tier 1K/2K/3K/4K on 2.1 and 2.5; exact pixels on 2.0-flash"),
             ratio: ratioSchema.optional(),
             return_base64: z.boolean().optional(),
@@ -160,16 +188,18 @@ export function registerTools(server) {
     }, async (args) => {
         const t0 = Date.now();
         try {
-            const result = await agnes.generateImage({
+            if (args.model)
+                await validateModel("agnes", args.model, "image");
+            const result = await withModelRetry("agnes", "image", () => agnes.generateImage({
                 prompt: args.prompt,
                 images: args.images,
                 model: args.model,
                 size: args.size,
                 ratio: args.ratio,
                 returnBase64: args.return_base64,
-            });
+            }));
             return await finishImage("agnes", result, {
-                model: args.model ?? AGNES_IMAGE_MODELS[0],
+                model: args.model ?? AGNES_IMAGE_DEFAULT,
                 mode: "image-edit",
                 input_images: args.images.length,
                 request_size: result.requestSize,
@@ -188,10 +218,17 @@ export function registerTools(server) {
             "(2.5: up to 8 images, 3 audios, 1 video, 12 files total; 2.5-flash: 720P only, up to 5 images, 3 audios, no video).",
         inputSchema: z.object({
             prompt: z.string().min(1).describe("Use <Picture N>, <Audio N>, <Video N> to reference media, numbered from 1"),
-            model: z.enum(AGNES_VIDEO_MODELS).optional().describe("Default agnes-video-2.5"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Any video model id from the live /models catalog; default ${AGNES_VIDEO_DEFAULT}`),
             mode: z.enum(["text", "keyframe", "reference"]),
             seconds: z.enum(["4", "5", "6", "7", "8", "9", "10", "11", "12"]).optional().describe("String duration, default 5"),
-            size: z.enum(VIDEO_SIZES).optional().describe("Default 720P; 2.5-flash only accepts 720P"),
+            size: z
+                .string()
+                .optional()
+                .describe("720P/1080P/1K/2K; agnes-video-2.5-flash only accepts 720P"),
             aspect_ratio: ratioSchema.optional().describe("Default 16:9"),
             seed: z.number().int().optional(),
             first_frame: z.string().optional().describe("keyframe mode: opening frame URL"),
@@ -210,7 +247,9 @@ export function registerTools(server) {
         }),
     }, async (args) => {
         try {
-            const task = await agnes.createVideo({
+            if (args.model)
+                await validateModel("agnes", args.model, "video");
+            const videoOpts = {
                 prompt: args.prompt,
                 model: args.model,
                 mode: args.mode,
@@ -223,7 +262,8 @@ export function registerTools(server) {
                 images: args.images,
                 audios: args.audios,
                 videos: args.videos,
-            });
+            };
+            const task = await withModelRetry("agnes", "video", () => agnes.createVideo(videoOpts));
             return {
                 content: [
                     {
@@ -246,11 +286,17 @@ export function registerTools(server) {
             "it with its local path, byte size and pixel size.",
         inputSchema: z.object({
             video_id: z.string().min(1).describe("video_id from agnes_video_create"),
-            model: z.enum(AGNES_VIDEO_MODELS).optional().describe("Must match the model used to create the job"),
+            model: z
+                .string()
+                .min(1)
+                .optional()
+                .describe(`Must match the model used to create the job; default ${AGNES_VIDEO_DEFAULT}`),
             download: z.boolean().optional().describe("Download the finished video (default true)"),
         }),
     }, async (args) => {
         try {
+            if (args.model)
+                await validateModel("agnes", args.model, "video");
             const status = await agnes.getVideo(args.video_id, args.model);
             if (!status.url || args.download === false) {
                 return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };

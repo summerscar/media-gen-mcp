@@ -1,12 +1,12 @@
-export declare const AGNES_IMAGE_MODELS: readonly ["agnes-image-2.5-flash", "agnes-image-2.1-flash", "agnes-image-2.0-flash"];
-export type AgnesImageModel = (typeof AGNES_IMAGE_MODELS)[number];
-export declare const AGNES_VIDEO_MODELS: readonly ["agnes-video-2.5", "agnes-video-2.5-flash"];
-export type AgnesVideoModel = (typeof AGNES_VIDEO_MODELS)[number];
 export declare const AGNES_RATIOS: readonly ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"];
 export type AgnesRatio = (typeof AGNES_RATIOS)[number];
 export declare const VIDEO_SIZES: readonly ["720P", "1080P", "1K", "2K"];
+/** Defaults only; accepted model ids come from the live /models catalog (see models.ts). */
+export declare const AGNES_IMAGE_DEFAULT = "agnes-image-2.5-flash";
+export declare const AGNES_VIDEO_DEFAULT = "agnes-video-2.5";
 export type AgnesImageOpts = {
-    model?: AgnesImageModel;
+    /** Any id from the provider's live /models list; defaults to AGNES_IMAGE_DEFAULT. */
+    model?: string;
     prompt: string;
     /** Tier (1K/2K/3K/4K) on 2.1/2.5; exact pixels such as 1024x768 on 2.0. */
     size?: string;
@@ -31,7 +31,7 @@ export type AgnesVideoRef = {
     requireAudio?: boolean;
 };
 export type AgnesVideoOpts = {
-    model?: AgnesVideoModel;
+    model?: string;
     prompt: string;
     mode: "text" | "keyframe" | "reference";
     /** String, 4-12. Defaults to "5". */
@@ -54,7 +54,7 @@ export declare const VIDEO_LIMITS: {
 };
 export type AgnesVideoTask = {
     videoId: string;
-    model: AgnesVideoModel;
+    model: string;
     status?: string;
     seconds?: string;
     size?: string;
@@ -62,7 +62,7 @@ export type AgnesVideoTask = {
 export declare function createVideo(o: AgnesVideoOpts): Promise<AgnesVideoTask>;
 export type AgnesVideoStatus = {
     videoId: string;
-    model: AgnesVideoModel;
+    model: string;
     status?: string;
     progress?: number;
     url?: string;
@@ -70,4 +70,4 @@ export type AgnesVideoStatus = {
     size?: string;
     error?: unknown;
 };
-export declare function getVideo(videoId: string, model?: AgnesVideoModel): Promise<AgnesVideoStatus>;
+export declare function getVideo(videoId: string, model?: string): Promise<AgnesVideoStatus>;

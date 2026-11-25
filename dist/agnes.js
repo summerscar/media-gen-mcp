@@ -5,10 +5,11 @@
  * Docs: https://agnes-ai.com/zh-Hans/docs
  */
 import { config, requireKey } from "./config.js";
-export const AGNES_IMAGE_MODELS = ["agnes-image-2.5-flash", "agnes-image-2.1-flash", "agnes-image-2.0-flash"];
-export const AGNES_VIDEO_MODELS = ["agnes-video-2.5", "agnes-video-2.5-flash"];
 export const AGNES_RATIOS = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"];
 export const VIDEO_SIZES = ["720P", "1080P", "1K", "2K"];
+/** Defaults only; accepted model ids come from the live /models catalog (see models.ts). */
+export const AGNES_IMAGE_DEFAULT = "agnes-image-2.5-flash";
+export const AGNES_VIDEO_DEFAULT = "agnes-video-2.5";
 function authHeaders() {
     return { Authorization: `Bearer ${requireKey("agnes")}`, "Content-Type": "application/json" };
 }
@@ -35,7 +36,7 @@ async function get(path) {
     return text ? JSON.parse(text) : {};
 }
 export async function generateImage(o) {
-    const model = o.model ?? AGNES_IMAGE_MODELS[0];
+    const model = o.model ?? AGNES_IMAGE_DEFAULT;
     const legacy = model === "agnes-image-2.0-flash";
     const size = legacy ? o.size ?? "1024x1024" : o.size ?? "2K";
     const extraBody = { response_format: o.returnBase64 ? "b64_json" : "url" };
@@ -68,7 +69,7 @@ export const VIDEO_LIMITS = {
     totalFiles: 12,
 };
 function buildVideoBody(o) {
-    const model = o.model ?? AGNES_VIDEO_MODELS[0];
+    const model = o.model ?? AGNES_VIDEO_DEFAULT;
     const flash = model === "agnes-video-2.5-flash";
     if (flash && o.size && o.size.toUpperCase() !== "720P") {
         throw new Error("agnes-video-2.5-flash only supports size 720P");
@@ -129,7 +130,7 @@ export async function createVideo(o) {
     return { videoId: String(videoId), model, status: json.status, seconds: json.seconds, size: json.size };
 }
 export async function getVideo(videoId, model) {
-    const m = model ?? AGNES_VIDEO_MODELS[0];
+    const m = model ?? AGNES_VIDEO_DEFAULT;
     const json = await get(`/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(m)}`);
     const data = (json.data ?? json);
     const status = data.status ?? json.status;
