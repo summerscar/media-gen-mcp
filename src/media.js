@@ -1,10 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import type { CallToolResult } from "@modelcontextprotocol/server";
 import { extname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 
-const EXT: Record<string, string> = {
+const EXT = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
   "image/webp": ".webp",
@@ -15,7 +14,7 @@ const EXT: Record<string, string> = {
   "audio/wav": ".wav",
 };
 
-function sniffMime(buf: Buffer): string | undefined {
+function sniffMime(buf) {
   if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
   if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
@@ -24,7 +23,7 @@ function sniffMime(buf: Buffer): string | undefined {
 }
 
 /** Width/height from PNG, JPEG and WebP headers. Undefined for anything else. */
-export function dimensions(buf: Buffer, mime?: string): { width: number; height: number } | undefined {
+export function dimensions(buf, mime) {
   try {
     if (mime === "image/png" || (buf[0] === 0x89 && buf[1] === 0x50)) {
       return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
@@ -57,17 +56,12 @@ export function dimensions(buf: Buffer, mime?: string): { width: number; height:
   return undefined;
 }
 
-export type SavedFile = {
-  path: string;
-  mime: string;
-  bytes: number;
-  width?: number;
-  height?: number;
-  /** Inline base64 for image files (always, no size cap); absent for video/audio. */
-  previewBase64?: string;
-};
-
-export async function saveBuffer(buf: Buffer, provider: string, fallbackMime?: string): Promise<SavedFile> {
+/**
+ * Shape returned by saveBuffer/saveFromUrl:
+ * { path, mime, bytes, width?, height?, previewBase64? }
+ * Images always carry previewBase64 (no size cap); video/audio do not.
+ */
+export async function saveBuffer(buf, provider, fallbackMime) {
   const mime = sniffMime(buf) || fallbackMime || "application/octet-stream";
   const day = new Date().toISOString().slice(0, 10);
   const dir = join(config.mediaDir, provider, day);
@@ -82,7 +76,7 @@ export async function saveBuffer(buf: Buffer, provider: string, fallbackMime?: s
 }
 
 /** Download a provider URL (or decode a data URI) into the local media directory. */
-export async function saveFromUrl(url: string, provider: string): Promise<SavedFile> {
+export async function saveFromUrl(url, provider) {
   if (url.startsWith("data:")) {
     const match = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(url);
     if (!match) throw new Error("unsupported data URI");
@@ -97,14 +91,10 @@ export async function saveFromUrl(url: string, provider: string): Promise<SavedF
 }
 
 /** Turn one saved file plus provider metadata into an MCP tool result. */
-export function toolResult(
-  file: SavedFile,
-  meta: Record<string, unknown>,
-  opts: { inlineImage?: boolean } = {},
-): CallToolResult {
+export function toolResult(file, meta, opts = {}) {
   const { previewBase64, ...rest } = file;
   const payload = { ...rest, ...meta };
-  const content: CallToolResult["content"] = [];
+  const content = [];
   if (opts.inlineImage !== false && previewBase64) {
     content.push({ type: "image", data: previewBase64, mimeType: file.mime });
   }
@@ -112,7 +102,7 @@ export function toolResult(
   return { content };
 }
 
-export function errorResult(error: unknown): CallToolResult {
+export function errorResult(error) {
   const message = error instanceof Error ? error.message : String(error);
   return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
 }

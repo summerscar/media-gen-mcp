@@ -4,10 +4,10 @@
   "description": "MCP server for SenseNova and Agnes image/video generation — one tool namespace per provider",
   "type": "module",
   "bin": {
-    "media-gen-mcp": "dist/index.js"
+    "media-gen-mcp": "src/index.js"
   },
   "files": [
-    "dist",
+    "src",
     "README.md",
     "LICENSE"
   ],
@@ -21,21 +21,13 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "start:stdio": "node dist/index.js --stdio",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "start": "node src/index.js",
+    "start:stdio": "node src/index.js --stdio"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "zod": "^4.1.12"
-  },
-  "devDependencies": {
-    "@modelcontextprotocol/client": "^2.4.0",
-    "@types/node": "^24.10.0",
-    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22.5"

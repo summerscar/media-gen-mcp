@@ -3,12 +3,12 @@
  * package stays standalone: no gateway, no database, no vendor SDK.
  */
 
-function env(name: string): string | undefined {
+function env(name) {
   const value = process.env[name];
   return value && value.trim() ? value.trim() : undefined;
 }
 
-function trimSlash(url: string): string {
+function trimSlash(url) {
   return url.replace(/\/+$/, "");
 }
 
@@ -31,9 +31,9 @@ export const config = {
     token: env("MCP_AUTH_TOKEN") ?? "",
   },
   version: "0.1.0",
-} as const;
+};
 
-export function requireKey(provider: "sensenova" | "agnes"): string {
+export function requireKey(provider) {
   const key = config[provider].apiKey;
   if (!key) {
     throw new Error(

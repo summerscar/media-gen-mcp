@@ -6,20 +6,19 @@
  */
 import { config, requireKey } from "./config.js";
 
-export const AGNES_RATIOS = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"] as const;
-export type AgnesRatio = (typeof AGNES_RATIOS)[number];
+export const AGNES_RATIOS = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"];
 
-export const VIDEO_SIZES = ["720P", "1080P", "1K", "2K"] as const;
+export const VIDEO_SIZES = ["720P", "1080P", "1K", "2K"];
 
-/** Defaults only; accepted model ids come from the live /models catalog (see models.ts). */
+/** Defaults only; accepted model ids come from the live /models catalog (see models.js). */
 export const AGNES_IMAGE_DEFAULT = "agnes-image-2.5-flash";
 export const AGNES_VIDEO_DEFAULT = "agnes-video-2.5";
 
-function authHeaders(): Record<string, string> {
+function authHeaders() {
   return { Authorization: `Bearer ${requireKey("agnes")}`, "Content-Type": "application/json" };
 }
 
-async function post(path: string, body: Record<string, unknown>, timeoutMs: number): Promise<Record<string, any>> {
+async function post(path, body, timeoutMs) {
   const res = await fetch(`${config.agnes.baseUrl}${path}`, {
     method: "POST",
     headers: authHeaders(),
@@ -28,42 +27,34 @@ async function post(path: string, body: Record<string, unknown>, timeoutMs: numb
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Agnes ${path} HTTP ${res.status}: ${text.slice(0, 500)}`);
-  return text ? (JSON.parse(text) as Record<string, any>) : {};
+  return text ? JSON.parse(text) : {};
 }
 
-async function get(path: string): Promise<Record<string, any>> {
+async function get(path) {
   const res = await fetch(`${config.agnes.baseUrl}${path}`, {
     headers: authHeaders(),
     signal: AbortSignal.timeout(60_000),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Agnes ${path} HTTP ${res.status}: ${text.slice(0, 500)}`);
-  return text ? (JSON.parse(text) as Record<string, any>) : {};
+  return text ? JSON.parse(text) : {};
 }
 
-export type AgnesImageOpts = {
-  /** Any id from the provider's live /models list; defaults to AGNES_IMAGE_DEFAULT. */
-  model?: string;
-  prompt: string;
-  /** Tier (1K/2K/3K/4K) on 2.1/2.5; exact pixels such as 1024x768 on 2.0. */
-  size?: string;
-  ratio?: AgnesRatio;
-  /** Input images turn the call into an edit; accepted top-level and inside extra_body. */
-  images?: string[];
-  returnBase64?: boolean;
-};
-
-export type AgnesImageResult = { url?: string; b64?: string; taskId?: string; requestSize: string };
-
-export async function generateImage(o: AgnesImageOpts): Promise<AgnesImageResult> {
+/**
+ * generateImage({ model?, prompt, size?, ratio?, images?, returnBase64? })
+ * -> { url?, b64?, taskId?, requestSize }
+ * size: tier (1K/2K/3K/4K) on 2.1/2.5, exact pixels such as 1024x768 on 2.0.
+ * Input images turn the call into an edit; accepted top-level and inside extra_body.
+ */
+export async function generateImage(o) {
   const model = o.model ?? AGNES_IMAGE_DEFAULT;
   const legacy = model === "agnes-image-2.0-flash";
   const size = legacy ? o.size ?? "1024x1024" : o.size ?? "2K";
 
-  const extraBody: Record<string, unknown> = { response_format: o.returnBase64 ? "b64_json" : "url" };
+  const extraBody = { response_format: o.returnBase64 ? "b64_json" : "url" };
   if (o.images?.length) extraBody.image = o.images;
 
-  const body: Record<string, unknown> = {
+  const body = {
     model,
     prompt: o.prompt,
     size,
@@ -73,7 +64,7 @@ export async function generateImage(o: AgnesImageOpts): Promise<AgnesImageResult
   if (o.images?.length) body.image = o.images;
 
   const json = await post("/images/generations", body, 300_000);
-  const first = (json.data?.[0] ?? {}) as { url?: string; b64_json?: string };
+  const first = json.data?.[0] ?? {};
   return {
     url: typeof first.url === "string" && first.url ? first.url : undefined,
     b64: first.b64_json || undefined,
@@ -82,24 +73,7 @@ export async function generateImage(o: AgnesImageOpts): Promise<AgnesImageResult
   };
 }
 
-export type AgnesAudioRef = { url: string };
-export type AgnesVideoRef = { url: string; startSeconds?: number; requireAudio?: boolean };
-
-export type AgnesVideoOpts = {
-  model?: string;
-  prompt: string;
-  mode: "text" | "keyframe" | "reference";
-  /** String, 4-12. Defaults to "5". */
-  seconds?: string;
-  size?: string;
-  aspectRatio?: AgnesRatio;
-  seed?: number;
-  firstFrame?: string;
-  lastFrame?: string;
-  images?: string[];
-  audios?: string[];
-  videos?: AgnesVideoRef[];
-};
+/** Reference-video entry: { url, startSeconds?, requireAudio? } */
 
 export const VIDEO_LIMITS = {
   referenceImages: 8,
@@ -109,7 +83,7 @@ export const VIDEO_LIMITS = {
   totalFiles: 12,
 };
 
-function buildVideoBody(o: AgnesVideoOpts) {
+function buildVideoBody(o) {
   const model = o.model ?? AGNES_VIDEO_DEFAULT;
   const flash = model === "agnes-video-2.5-flash";
 
@@ -133,7 +107,7 @@ function buildVideoBody(o: AgnesVideoOpts) {
     }
   }
 
-  const body: Record<string, unknown> = {
+  const body = {
     model,
     prompt: o.prompt,
     mode: o.mode,
@@ -157,15 +131,8 @@ function buildVideoBody(o: AgnesVideoOpts) {
   return { model, body };
 }
 
-export type AgnesVideoTask = {
-  videoId: string;
-  model: string;
-  status?: string;
-  seconds?: string;
-  size?: string;
-};
-
-export async function createVideo(o: AgnesVideoOpts): Promise<AgnesVideoTask> {
+/** createVideo -> { videoId, model, status?, seconds?, size? } */
+export async function createVideo(o) {
   const { model, body } = buildVideoBody(o);
   const json = await post("/videos", body, 120_000);
   const videoId = json.video_id ?? json.id ?? json.data?.video_id;
@@ -173,21 +140,11 @@ export async function createVideo(o: AgnesVideoOpts): Promise<AgnesVideoTask> {
   return { videoId: String(videoId), model, status: json.status, seconds: json.seconds, size: json.size };
 }
 
-export type AgnesVideoStatus = {
-  videoId: string;
-  model: string;
-  status?: string;
-  progress?: number;
-  url?: string;
-  seconds?: string;
-  size?: string;
-  error?: unknown;
-};
-
-export async function getVideo(videoId: string, model?: string): Promise<AgnesVideoStatus> {
+/** getVideo -> { videoId, model, status?, progress?, url?, seconds?, size?, error? } */
+export async function getVideo(videoId, model) {
   const m = model ?? AGNES_VIDEO_DEFAULT;
   const json = await get(`/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(m)}`);
-  const data = (json.data ?? json) as Record<string, any>;
+  const data = json.data ?? json;
   const status = data.status ?? json.status;
   const done = status === "completed" || status === "succeeded" || status === "success";
   return {

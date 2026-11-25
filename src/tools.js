@@ -2,10 +2,9 @@
  * Tool surface: one namespace per provider, so a client can hide either
  * provider wholesale and the model only sees models and knobs that exist.
  */
-import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { config } from "./config.js";
-import { AGNES_IMAGE_DEFAULT, AGNES_RATIOS, AGNES_VIDEO_DEFAULT, type AgnesVideoRef } from "./agnes.js";
+import { AGNES_IMAGE_DEFAULT, AGNES_RATIOS, AGNES_VIDEO_DEFAULT } from "./agnes.js";
 import * as agnes from "./agnes.js";
 import * as sensenova from "./sensenova.js";
 import { errorResult, saveFromUrl, toolResult } from "./media.js";
@@ -16,12 +15,7 @@ const ratioSchema = z.enum(AGNES_RATIOS).describe("Aspect ratio; the provider pi
 const commonImageNotes =
   "The result is returned as an image block (base64) plus JSON metadata: provider CDN url, real pixel size, bytes and elapsed time. A copy is also written to the server's MEDIA_DIR, but that path is local to the server.";
 
-async function finishImage(
-  provider: "sensenova" | "agnes",
-  result: { url?: string; b64?: string },
-  meta: Record<string, unknown>,
-  startedAt: number,
-) {
+async function finishImage(provider, result, meta, startedAt) {
   const source = result.url ?? (result.b64 ? `data:image/png;base64,${result.b64}` : undefined);
   if (!source) throw new Error("provider returned neither a url nor base64 data");
   const file = await saveFromUrl(source, provider);
@@ -33,7 +27,7 @@ async function finishImage(
   });
 }
 
-export function registerTools(server: McpServer): void {
+export function registerTools(server) {
   /* ---------------------------------------------------------------- SenseNova */
 
   server.registerTool(
@@ -308,13 +302,13 @@ export function registerTools(server: McpServer): void {
           lastFrame: args.last_frame,
           images: args.images,
           audios: args.audios,
-          videos: args.videos as AgnesVideoRef[] | undefined,
+          videos: args.videos,
         };
         const task = await withModelRetry("agnes", "video", () => agnes.createVideo(videoOpts));
         return {
           content: [
             {
-              type: "text" as const,
+              type: "text",
               text: JSON.stringify(
                 {
                   ...task,
@@ -354,14 +348,14 @@ export function registerTools(server: McpServer): void {
         if (args.model) await validateModel("agnes", args.model, "video");
         const status = await agnes.getVideo(args.video_id, args.model);
         if (!status.url || args.download === false) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }] };
+          return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
         }
         const file = await saveFromUrl(status.url, "agnes");
         const { previewBase64: _ignored, ...rest } = file;
         return {
           content: [
             {
-              type: "text" as const,
+              type: "text",
               text: JSON.stringify({ ...status, file: rest }, null, 2),
             },
           ],

@@ -81,7 +81,7 @@ if (stdioMode) {
   process.on("SIGTERM", shutdown);
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+function timingSafeEqual(a, b) {
   // Constant-time compare without pulling in crypto for a length-checked string.
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
